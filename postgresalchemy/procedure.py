@@ -28,23 +28,28 @@ class Procedure(object):
 
 class ProcedureGenerator(object):
     _re_flags = re.DOTALL | re.MULTILINE
-    _function_body_re = re.compile(r"\s*def\s+[^(]+\(.*?\)\s*(?:->\s*[^\n]+)\s*:(?:\s*#[^\n]*)\n(.*)", flags=_re_flags)
+    _function_body_re = re.compile(r"\s*def\s+[^(]+\(.*?\)\s*(?:->\s*[^\n]+)?\s*:(?:\s*#[^\n]*)?\n(.*)",
+                                   flags=_re_flags)
 
     @classmethod
     def from_function(cls, f):
-        # Signature related
-        signature = inspect.signature(f)
-        parameters = signature.parameters.values()
+        parameters = cls.get_parameters(f)
         sql_parameters = ", ".join(cls.convert_python_type_to_sql(p) for p in parameters)
-        sql_return = cls.generate_return_type(signature)
+        sql_return = cls.generate_return_type(f)
         # Code related
-        function_source = inspect.getsource(f)
-        function_body = cls.get_function_body(function_source)
+        function_body = cls.get_function_body(f)
         cls.check_for_overwritten_input_parameters(function_body)
         return Procedure(name=f.__name__, parameters=sql_parameters, return_type=sql_return, code=function_body)
 
+    @staticmethod
+    def get_parameters(f):
+        signature = inspect.signature(f)
+        parameters = signature.parameters.values()
+        return parameters
+
     @classmethod
-    def get_function_body(cls, source):
+    def get_function_body(cls, f):
+        source = inspect.getsource(f)
         match = cls._function_body_re.match(source)
         return match.group(1)
 
@@ -63,7 +68,7 @@ class ProcedureGenerator(object):
             type_name = python_type.name
         elif hasattr(python_type, "__table__"):
             type_name = python_type.__table__.name
-        elif isinstance(python_type, Array):
+        elif issubclass(python_type, Array):
             type_name = cls.convert_python_type_to_sql(python_type.__args__[0]) + "[]"
         else:
             type_name = mappings.get(python_type)
@@ -71,27 +76,44 @@ class ProcedureGenerator(object):
                 raise ValueError("No Postgres mapping was found for Python type: %s" % python_type)
         return type_name
 
-    @staticmethod
-    def generate_sql_default_value(type_name, default=None):
+    @classmethod
+    def generate_sql_default_value(cls, type_name, default=None):
         if default is not None:
-            default_parameters = type_name, str(default)
+            default_parameters = type_name, cls.convert_python_value_to_sql(default)
             return " DEFAULT ".join(default_parameters)
         else:
             return type_name
 
+    @staticmethod
+    def convert_python_value_to_sql(value):
+        def convert_inner(val):
+            if val is None:
+                return "NULL"
+            elif isinstance(val, (str, int, float, bool)):
+                return str(val)
+            elif isinstance(val, (datetime, date, time)):
+                return val.isoformat()
+            elif isinstance(val, Sequence):
+                array_values = ', '.join(convert_inner(v) for v in val)
+                return "{%s}" % array_values
+        result = "'%s'" % convert_inner(value)
+        return result
+
     @classmethod
     def generate_sql_procedure_parameter(cls, parameter):
         type_name = cls.convert_python_type_to_sql(parameter.annotation)
-        sql_parameter = cls.generate_sql_default_value(type_name, parameter.default)
+        type_and_default = cls.generate_sql_default_value(type_name, parameter.default)
+        sql_parameter = " ".join((parameter.name, type_and_default))
         return sql_parameter
 
     @classmethod
-    def generate_return_type(cls, signature):
+    def generate_return_type(cls, f):
+        signature = inspect.signature(f)
         annotation = signature.return_annotation
 
         if annotation == inspect.Signature.empty:
             return_type = "void"
-        elif isinstance(annotation, typing.Sequence):
+        elif issubclass(annotation, Sequence):
             python_type = annotation.__args__[0]
             return_type = "SETOF " + cls.convert_python_type_to_sql(python_type)
         else:
