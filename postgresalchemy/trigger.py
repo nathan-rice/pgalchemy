@@ -1,43 +1,32 @@
 import inspect
+import zlib
 from sqlalchemy import Table
 from sqlalchemy.sql.elements import ClauseList
 
 
-class Trigger(object):
+class BaseTrigger(object):
 
     _valid_execution_times = {"BEFORE", "AFTER", "INSTEAD_OF"}
     _valid_defers = {"NOT DEFERRABLE", "DEFERRABLE INITIALLY IMMEDIATE", "DEFERRABLE INITIALLY DEFERRED"}
     _valid_cardinalities = {"FOR EACH ROW", "FOR EACH STATEMENT"}
 
-    def __init__(self, name="trigger", execution_time="BEFORE", event="INSERT", selectable=None, from_table=None,
-                 defer="NOT DEFERRABLE", cardinality="ROW", condition=None, arguments=None):
-        self._name = name
-        self._set_execution_time(execution_time)
-        self._set_event(event)
-        self._set_selectable(selectable)
-        self._set_from_table(from_table)
-        self._set_defer(defer)
-        self._set_cardinality(cardinality)
-        self._set_condition(condition)
-        self._set_arguments(arguments)
-
     def __call__(self, f):
         signature = inspect.signature(f)
         parameters = signature.parameters.values()
+        self._function = f.__name__
 
-    @property
-    def before(self) -> 'TriggerEvent':
-        self._execution_time = "BEFORE"
-        return TriggerEvent(self)
+    def __str__(self):
+        event = " OR ".join(self._event)
+        statement = self._sql_template.format(name=self._name, execution_time=self._execution_time, event=event,
+                                              selectable=self._selectable, from_table=self._from_table,
+                                              deferr=self._defer, cardinality=self._cardinality,
+                                              condition=self._condition, function=self._function,
+                                              arguments=self._arguments)
+        return statement
 
     @property
     def after(self) -> 'TriggerEvent':
         self._execution_time = "AFTER"
-        return TriggerEvent(self)
-
-    @property
-    def instead_of(self) -> 'TriggerEvent':
-        self._execution_time = "INSTEAD OF"
         return TriggerEvent(self)
 
     def _set_execution_time(self, execution_time: str):
@@ -95,7 +84,59 @@ class Trigger(object):
         self._condition = condition
 
     def _set_arguments(self, arguments):
-        self._arguments = ", ".join(str(a) for a in arguments)
+        self._arguments = ",".join("'s'" % str(a) for a in arguments)
+
+
+class Trigger(BaseTrigger):
+
+    _sql_template = """
+        CREATE TRIGGER {name} {execution_time} {event} on {selectable}
+        {from_table}
+        {defer}
+        {cardinality}
+        {condition}
+        EXECUTE PROCEDURE {function} ({arguments})
+    """
+
+    def __init__(self, name=None, function=None, execution_time="BEFORE", event="INSERT", selectable=None,
+                 from_table=None, defer="NOT DEFERRABLE", cardinality="ROW", condition='', arguments=None):
+        self._function = function
+        self._set_execution_time(execution_time)
+        self._set_event(event)
+        self._set_selectable(selectable)
+        self._set_from_table(from_table)
+        self._set_defer(defer)
+        self._set_cardinality(cardinality)
+        self._set_condition(condition)
+        self._set_arguments(arguments)
+        if not name:
+            self._name = "placeholder"
+
+    @property
+    def before(self) -> 'TriggerEvent':
+        self._execution_time = "BEFORE"
+        return TriggerEvent(self)
+
+    @property
+    def instead_of(self) -> 'TriggerEvent':
+        self._execution_time = "INSTEAD OF"
+        return TriggerEvent(self)
+
+
+class ConstraintTrigger(BaseTrigger):
+    def __init__(self, name=None, function=None, event="INSERT", selectable=None,
+                 from_table=None, defer="NOT DEFERRABLE", cardinality="ROW", condition=None, arguments=None):
+        self._function = function
+        self._set_execution_time("AFTER")
+        self._set_event(event)
+        self._set_selectable(selectable)
+        self._set_from_table(from_table)
+        self._set_defer(defer)
+        self._set_cardinality(cardinality)
+        self._set_condition(condition)
+        self._set_arguments(arguments)
+        if not name:
+            self._name = "placeholder"
 
 
 class TriggerClause(object):

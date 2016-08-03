@@ -1,9 +1,7 @@
 import inspect
 import zlib
 import math
-import sqlalchemy
 import re
-from typing import TypeVar
 
 from .types import *
 
@@ -93,24 +91,20 @@ class ProcedureGenerator(object):
             if val is None:
                 converted_val = "NULL"
             elif isinstance(val, str):
-                converted_val = '"%s"' % val.replace('"', '\\"')
+                converted_val = "'%s'" % val.replace("'", "''")
             elif isinstance(val, (int, float, bool)):
                 converted_val = str(val)
             elif isinstance(val, (datetime, date, time)):
-                converted_val = val.isoformat()
+                converted_val = "'%s'" % val.isoformat()
             elif isinstance(val, Sequence):
                 array_values = ','.join(convert_inner(v) for v in val)
-                converted_val = "{%s}" % array_values
+                converted_val = "ARRAY[%s]" % array_values
             elif hasattr(val, "__table__"):
                 converted_val = val.__table__.name
             else:
                 raise ValueError("No known type mapping for Python type: %s" % type(val))
             return converted_val
-        if isinstance(value, str):
-            inner = value.replace("'", "\\'")
-        else:
-            inner = convert_inner(value)
-        result = "E'%s'" % inner
+        result = convert_inner(value)
         return result
 
     @classmethod

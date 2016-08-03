@@ -1,45 +1,5 @@
 import pytest
-from sqlalchemy import MetaData, Table, Column, Integer, Text
-from sqlalchemy.ext.declarative import declarative_base
-import postgresalchemy.procedure as p
-
-metadata = MetaData()
-Base = declarative_base(metadata=metadata)
-test_table = Table("test_table", metadata, Column("id", Integer, primary_key=True), Column("name", Text))
-
-
-class TestMappedClass(Base):
-    __table__ = test_table
-
-mapped_instance = TestMappedClass(id=1, name="test")
-
-
-def example_1():
-    return True
-
-
-def example_2(a: int = 1):
-    return True
-
-
-def example_3(a: int = 1) -> bool:
-    return True
-
-
-def example_4(a: int = 1, b: bool = True,
-              c: p.Array[int] = (1, 2, 3)) -> bool:  # test
-    return True
-
-
-def example_5(a: int = 1, b: bool = True,
-              c: p.Array[int] = (1, 2, 3)) -> p.Sequence[int]:  # test
-    a = 2
-    b = False
-    return c
-
-
-def example_6(a: TestMappedClass) -> p.Sequence[TestMappedClass]:  # test
-    return 1, 2, 3
+from .config import *
 
 
 def test_get_function_body_simple():
@@ -124,33 +84,33 @@ def test_generate_return_type_sequence():
 
 
 def test_convert_value_to_sql_none():
-    assert p.ProcedureGenerator.convert_python_value_to_sql(None) == "E'NULL'"
+    assert p.ProcedureGenerator.convert_python_value_to_sql(None) == "NULL"
 
 
 def test_convert_value_to_sql_boolean():
-    assert p.ProcedureGenerator.convert_python_value_to_sql(True) == "E'True'"
+    assert p.ProcedureGenerator.convert_python_value_to_sql(True) == "True"
 
 
 def test_convert_value_to_sql_boolean():
-    assert p.ProcedureGenerator.convert_python_value_to_sql(1.0) == "E'1.0'"
+    assert p.ProcedureGenerator.convert_python_value_to_sql(1.0) == "1.0"
 
 
 def test_convert_value_to_sql_datetime():
     now = p.datetime.utcnow()
     date_string = p.ProcedureGenerator.convert_python_value_to_sql(now)
-    assert date_string == "E'%s'" % now.isoformat()
+    assert date_string == "'%s'" % now.isoformat()
 
 
 def test_convert_value_to_sql_array():
     my_array = [1, 2, 3]
     array_string = p.ProcedureGenerator.convert_python_value_to_sql(my_array)
-    assert array_string == "E'{1,2,3}'"
+    assert array_string == "ARRAY[1,2,3]"
 
 
 def test_convert_value_to_sql_array_2d():
     my_array = [[1, 2], [3, 4]]
     array_string = p.ProcedureGenerator.convert_python_value_to_sql(my_array)
-    assert array_string == "E'{{1,2},{3,4}}'"
+    assert array_string == "ARRAY[ARRAY[1,2],ARRAY[3,4]]"
 
 
 def test_convert_python_value_to_sql_unknown():
@@ -165,23 +125,23 @@ def test_generate_sql_default_value_nodefault():
 
 def test_generate_sql_default_value_boolean_default():
     type_and_default = p.ProcedureGenerator.generate_sql_default_value("boolean", True)
-    assert type_and_default == "boolean DEFAULT E'True'"
+    assert type_and_default == "boolean DEFAULT True"
 
 
 def test_generate_sql_default_value_null_default():
     type_and_default = p.ProcedureGenerator.generate_sql_default_value("boolean", None)
-    assert type_and_default == "boolean DEFAULT E'NULL'"
+    assert type_and_default == "boolean DEFAULT NULL"
 
 
 def test_generate_sql_default_value_float_default():
     type_and_default = p.ProcedureGenerator.generate_sql_default_value("float", 1.0)
-    assert type_and_default == "float DEFAULT E'1.0'"
+    assert type_and_default == "float DEFAULT 1.0"
 
 
 def test_generate_procedure_from_function():
     procedure = p.ProcedureGenerator.from_function(example_4)
     assert procedure.name == "example_4"
-    assert procedure.parameters == ["a int DEFAULT E'1'", "b boolean DEFAULT E'True'", "c int[] DEFAULT E'{1,2,3}'"]
+    assert procedure.parameters == ["a int DEFAULT 1", "b boolean DEFAULT True", "c int[] DEFAULT ARRAY[1,2,3]"]
     assert procedure.return_type == "boolean"
 
 
