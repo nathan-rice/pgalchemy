@@ -1,4 +1,5 @@
 import pytest
+import postgresalchemy.procedure as p
 from .config import *
 
 
@@ -91,8 +92,16 @@ def test_convert_value_to_sql_boolean():
     assert p.ProcedureGenerator.convert_python_value_to_sql(True) == "True"
 
 
-def test_convert_value_to_sql_boolean():
+def test_convert_value_to_sql_string():
+    assert p.ProcedureGenerator.convert_python_value_to_sql("test") == "'test'"
+
+
+def test_convert_value_to_sql_float():
     assert p.ProcedureGenerator.convert_python_value_to_sql(1.0) == "1.0"
+
+
+def test_convert_value_to_sql_sqlalchemy_instance():
+    assert p.ProcedureGenerator.convert_python_value_to_sql(mapped_instance) == "test_table"
 
 
 def test_convert_value_to_sql_datetime():

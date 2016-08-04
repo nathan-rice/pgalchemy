@@ -8,21 +8,23 @@ from .types import *
 
 class Procedure(object):
     _sql_template = """
-        CREATE FUNCTION {name} ({parameters}) RETURNS {return_type} $$
+        CREATE FUNCTION {name} ({parameters}) RETURNS {return_type} AS $$
         {code}
-        $$ LANGUAGE plpython3u;
+        $$ LANGUAGE plpython3u {volatile}
     """
 
-    def __init__(self, name=None, parameters=None, return_type="void", code=""):
+    def __init__(self, name=None, parameters=None, return_type="void", code="", volatile=True):
         self.name = name if name is not None else "procedure_" + str(abs(zlib.adler32(code)))
         self.parameters = parameters if parameters is not None else []
         self.return_type = return_type
         self.code = code
+        self.volatile = volatile
 
     def __str__(self):
         parameters = ", ".join(self.parameters)
+        volatile = "VOLATILE" if self.volatile else "STABLE"
         return self._sql_template.format(name=self.name, parameters=parameters, return_type=self.return_type,
-                                         code=self.code)
+                                         code=self.code, volatile=volatile)
 
 
 class ProcedureGenerator(object):

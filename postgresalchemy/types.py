@@ -1,5 +1,6 @@
 from typing import Sequence
 from datetime import date, time, datetime, timedelta
+from .trigger import Trigger
 
 Array = type('Array', Sequence.__bases__, dict(Sequence.__dict__))
 
@@ -13,5 +14,6 @@ mappings = {
     date: 'date',
     time: 'time without time zone',
     datetime: 'timestamp without time zone',
-    timedelta: 'interval'
+    timedelta: 'interval',
+    Trigger: 'trigger'
 }
