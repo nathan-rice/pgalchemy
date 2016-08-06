@@ -5,6 +5,7 @@ from sqlalchemy import Table, Column
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.elements import ClauseList
 from abc import ABC, abstractmethod
+from .util import get_column_name
 
 
 class TriggerClause(object):
@@ -34,15 +35,7 @@ class TriggerEvent(TriggerClause):
         return self
 
     def update_of(self, *columns) -> 'TriggerEvent':
-        def get_name(c):
-            if isinstance(c, Column):
-                name = c.name
-            elif isinstance(c, InstrumentedAttribute):
-                name = c.prop.columns[0].name  # Need the underlying database table column name
-            else:
-                name = c
-            return name
-        column_names = ", ".join(get_name(c) for c in columns)
+        column_names = ", ".join(get_column_name(c) for c in columns)
         self._trigger._set_event("UPDATE OF %s" % column_names)
         return self
 
