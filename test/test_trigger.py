@@ -11,7 +11,8 @@ def test_trigger_wrong_return_annotation():
 
 def test_trigger_noargs():
     trigger = t.Trigger()
-    trigger.before.insert.update.on(test_table).for_each.row(example_7)
+    trigger.before.insert.update.on(test_table).from_table(test_table).deferrable.deferred.for_each.row(example_7)
+    assert trigger._defer == "DEFERRABLE INITIALLY DEFERRED"
     assert trigger._execution_time == "BEFORE"
     assert trigger._event == ["INSERT", "UPDATE"]
     assert trigger._selectable == "test_table"
@@ -21,7 +22,9 @@ def test_trigger_noargs():
 
 def test_trigger_args():
     trigger = t.Trigger()
-    trigger.before.insert.update.on(test_table).for_each.row.with_arguments("a", "b", "c")(example_8)
+    trigger.before.insert.update.on(test_table).deferrable.immediate.for_each.row.with_arguments("a", "b", "c")
+    trigger(example_8)
+    assert trigger._defer == "DEFERRABLE INITIALLY IMMEDIATE"
     assert trigger._arguments == ("a", "b", "c")
 
 
@@ -51,7 +54,7 @@ def test_trigger_with_sqlalchemy_table():
         .update_of(test_table.c.name, test_table.c.id) \
         .on(test_table) \
         .for_each(example_7)
-    assert trigger._event == ["INSERT", "UPDATE OF name, id"]
+    assert trigger._event == ["INSERT", "UPDATE OF test_table.name, test_table.id"]
     assert trigger._selectable == "test_table"
 
 
@@ -62,7 +65,7 @@ def test_trigger_with_sqlalchemy_class():
         .update_of(TestMappedClass.name, TestMappedClass.id) \
         .on(TestMappedClass) \
         .for_each(example_7)
-    assert trigger._event == ["INSERT", "UPDATE OF name, id"]
+    assert trigger._event == ["INSERT", "UPDATE OF test_table.name, test_table.id"]
     assert trigger._selectable == "test_table"
 
 

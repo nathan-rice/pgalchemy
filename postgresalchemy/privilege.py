@@ -1,3 +1,4 @@
+from typing import Sequence
 from .util import get_column_name, get_table_name, get_role_name
 
 
@@ -58,7 +59,6 @@ class SequenceOnInSchema(PrivilegeClause):
 
 
 class TableOnInSchema(PrivilegeClause):
-    @property
     def tables_in_schema(self, *schemas) -> GrantTo:
         schema_names = ", ".join(schemas)
         self._privilege._set_targets("ALL TABLES IN SCHEMA %s" % schema_names)
@@ -76,7 +76,7 @@ class AllOnInSchema(SelectOrUpdateOnInSchema, ExecuteOnInSchema):
 class OnBase(PrivilegeClause):
     def _set_on(self, target_type, targets):
         self._privilege._target_type = target_type
-        self._privilege._set_targets(list(targets))  # Converting here to avoid tuple-in-a-list
+        self._privilege._set_targets(targets)  # Converting here to avoid tuple-in-a-list
         return GrantTo(self._privilege)
 
 
@@ -84,6 +84,8 @@ class TableOn(OnBase):
     def table(self, *tables) -> GrantTo:
         return self._set_on("TABLE", tables)
 
+
+class ExpandedTableOn(TableOn):
     @property
     def all(self) -> TableOnInSchema:
         return TableOnInSchema(self._privilege)
@@ -125,7 +127,7 @@ class LanguageOn(OnBase):
 
 class LargeObjectOn(OnBase):
     def large_object(self, *large_objects) -> GrantTo:
-        return self._set_on("LARGE OBJECTS", large_objects)
+        return self._set_on("LARGE OBJECT", large_objects)
 
 
 class SchemaOn(OnBase):
@@ -145,7 +147,7 @@ class TypeOn(OnBase):
 
 class ExecuteOn(OnBase):
     def function(self, *functions) -> GrantTo:
-        return self._set_on("FUNCTIONS", functions)
+        return self._set_on("FUNCTION", functions)
 
     @property
     def all(self) -> ExecuteOnInSchema:
@@ -168,10 +170,22 @@ class UsageOn(SequenceOn, DomainOn, ForeignDataWrapperOn, ForeignServerOn, Langu
         return SequenceOnInSchema(self._privilege)
 
 
-class AllOn(UsageOn, SelectOrUpdateOn, ExecuteOn):
+class AllOn(UsageOn, SelectOrUpdateOn, ExecuteOn, CreateOn):
     @property
     def all(self) -> AllOnInSchema:
         return AllOnInSchema(self._privilege)
+
+
+class SchemaOnConnector(PrivilegeClause):
+    @property
+    def on(self) -> SchemaOn:
+        return SchemaOn(self._privilege)
+
+
+class ExecuteOnConnector(PrivilegeClause):
+    @property
+    def on(self) -> ExecuteOn:
+        return ExecuteOn(self._privilege)
 
 
 class AllOnConnector(PrivilegeClause):
@@ -252,8 +266,8 @@ class TableCommandBase(PrivilegeClause):
 
 class TableCommand(TableCommandBase):
     @property
-    def on(self) -> TableOn:
-        return TableOn(self._privilege)
+    def on(self) -> ExpandedTableOn:
+        return ExpandedTableOn(self._privilege)
 
 
 class CallableTableCommand(TableCommand):
@@ -341,6 +355,7 @@ class DatabaseCommandBase(PrivilegeClause):
         self._privilege._set_commands(CommandOption("TEMPORARY"))
         return self
 
+
 class DatabaseCommand(DatabaseCommandBase):
     @property
     def on(self) -> DatabaseOn:
@@ -349,8 +364,9 @@ class DatabaseCommand(DatabaseCommandBase):
 
 class FunctionCommand(PrivilegeClause):
     @property
-    def execute(self) -> 'ExecuteOn':
-        return ExecuteOn(self._privilege)
+    def execute(self) -> 'ExecuteOnConnector':
+        self._privilege._set_commands(CommandOption("EXECUTE"))
+        return ExecuteOnConnector(self._privilege)
 
 
 class UsageCommand(PrivilegeClause):
@@ -369,24 +385,25 @@ class UsageCommand(PrivilegeClause):
         return UsageOn(self._privilege)
 
 
-class SelectCommand(CallableTableCommand):
+class SelectOrUpdateCommand(CallableTableCommand):
     @property
     def usage(self) -> SequenceCommand:
         self._privilege._set_commands(CommandOption("USAGE"))
         return SequenceCommand(self._privilege)
 
+    @property
+    def on(self) -> SelectOrUpdateOn:
+        return SelectOrUpdateOn(self._privilege)
+
+
+class SelectCommand(SelectOrUpdateCommand):
     @property
     def update(self) -> 'UpdateCommand':
         self._privilege._set_commands(CommandOption("UPDATE"))
         return UpdateCommand(self._privilege)
 
 
-class UpdateCommand(CallableTableCommand):
-    @property
-    def usage(self) -> SequenceCommand:
-        self._privilege._set_commands(CommandOption("USAGE"))
-        return SequenceCommand(self._privilege)
-
+class UpdateCommand(SelectOrUpdateCommand):
     @property
     def select(self) -> SelectCommand:
         self._privilege._set_commands(CommandOption("UPDATE"))
@@ -405,9 +422,9 @@ class CreateCommand(PrivilegeClause):
         return DatabaseCommand(self._privilege)
 
     @property
-    def usage(self) -> SchemaOn:
+    def usage(self) -> SchemaOnConnector:
         self._privilege._set_commands(CommandOption("USAGE"))
-        return SchemaOn(self._privilege)
+        return SchemaOnConnector(self._privilege)
 
     @property
     def on(self) -> CreateOn:
@@ -435,24 +452,27 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
 
     def _set_commands(self, commands):
         if commands:
-            if isinstance(commands, list):
-                self._commands = commands
-            elif commands not in self._commands:
-                self._commands.append(commands)
+            if isinstance(commands, CommandOption):
+                if commands not in self._commands:
+                    self._commands.append(commands)
+            elif isinstance(commands, Sequence):
+                self._commands = list(commands)
 
     def _set_targets(self, target):
         if target:
-            if isinstance(target, list):
-                self._target = target
-            elif target not in self._target:
-                self._target.append(target)
+            if isinstance(target, str):
+                if target not in self._target:
+                    self._target.append(target)
+            elif isinstance(target, Sequence):
+                self._target = list(target)
 
     def _set_recipients(self, recipient):
         if recipient:
-            if isinstance(recipient, list):
-                self._recipient = recipient
-            elif recipient not in self._recipient:
-                self._recipient.append(recipient)
+            if isinstance(recipient, str):
+                if recipient not in self._recipient:
+                    self._recipient.append(recipient)
+            elif isinstance(recipient, Sequence):
+                self._recipient = list(recipient)
 
     @property
     def all(self) -> AllOnConnector:
