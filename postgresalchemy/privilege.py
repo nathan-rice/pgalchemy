@@ -4,6 +4,7 @@ from .util import get_column_name, get_table_name, get_role_name
 class PrivilegeClause(object):
     def __init__(self, privilege):
         self._privilege = privilege
+        self._privilege._current_clause = self
 
     def __str__(self):
         return str(self._privilege)
@@ -11,16 +12,22 @@ class PrivilegeClause(object):
 
 class CommandOption(object):
     def __init__(self, command_name, *columns):
-        self.command_name = command_name
+        self.name = command_name
         self.columns = columns
 
     def __str__(self):
         if self.columns:
             column_names = ", ".join(get_column_name(c) for c in self.columns)
-            as_str = "%s (%s)" % (self.command_name, column_names)
+            as_str = "%s (%s)" % (self.name, column_names)
         else:
-            as_str = self.command_name
+            as_str = self.name
         return as_str
+
+    def __eq__(self, other):
+        return self.name == other.name and self.columns == other.columns
+
+    def __hash__(self):
+        return hash(str(self))
 
 
 class WithGrantOption(PrivilegeClause):
@@ -37,14 +44,14 @@ class GrantTo(PrivilegeClause):
 
 
 class ExecuteOnInSchema(PrivilegeClause):
-    def functions_in_schema(self, *schemas):
+    def functions_in_schema(self, *schemas) -> GrantTo:
         schema_names = ", ".join(schemas)
         self._privilege._set_targets("ALL FUNCTIONS IN SCHEMA %s" % schema_names)
         return GrantTo(self._privilege)
 
 
 class SequenceOnInSchema(PrivilegeClause):
-    def sequences_in_schema(self, *schemas):
+    def sequences_in_schema(self, *schemas) -> GrantTo:
         schema_names = ", ".join(schemas)
         self._privilege._set_targets("ALL SEQUENCES IN SCHEMA %s" % schema_names)
         return GrantTo(self._privilege)
@@ -52,7 +59,7 @@ class SequenceOnInSchema(PrivilegeClause):
 
 class TableOnInSchema(PrivilegeClause):
     @property
-    def tables_in_schema(self, *schemas):
+    def tables_in_schema(self, *schemas) -> GrantTo:
         schema_names = ", ".join(schemas)
         self._privilege._set_targets("ALL TABLES IN SCHEMA %s" % schema_names)
         return GrantTo(self._privilege)
@@ -62,100 +69,83 @@ class SelectOrUpdateOnInSchema(SequenceOnInSchema, TableOnInSchema):
     """Placeholder docstring"""
 
 
-class AllOnInSchema(SequenceOnInSchema, SelectOrUpdateOnInSchema, ExecuteOnInSchema):
+class AllOnInSchema(SelectOrUpdateOnInSchema, ExecuteOnInSchema):
     """Placeholder docstring"""
 
 
-class TableOn(PrivilegeClause):
-    def table(self, *tables) -> GrantTo:
-        self._privilege._target_type = "TABLE"
-        self._privilege._set_targets(tables)
+class OnBase(PrivilegeClause):
+    def _set_on(self, target_type, targets):
+        self._privilege._target_type = target_type
+        self._privilege._set_targets(list(targets))  # Converting here to avoid tuple-in-a-list
         return GrantTo(self._privilege)
+
+
+class TableOn(OnBase):
+    def table(self, *tables) -> GrantTo:
+        return self._set_on("TABLE", tables)
 
     @property
     def all(self) -> TableOnInSchema:
         return TableOnInSchema(self._privilege)
 
 
-class SequenceOn(PrivilegeClause):
+class SequenceOn(OnBase):
     def sequence(self, *sequences) -> GrantTo:
-        self._privilege._target_type = "SEQUENCE"
-        self._privilege._set_targets(sequences)
-        return GrantTo(self._privilege)
+        return self._set_on("SEQUENCE", sequences)
 
     @property
     def all(self) -> SequenceOnInSchema:
         return SequenceOnInSchema(self._privilege)
 
 
-class DatabaseOn(PrivilegeClause):
+class DatabaseOn(OnBase):
     def database(self, *databases) -> GrantTo:
-        self._privilege._target_type = "DATABASE"
-        self._privilege._set_targets(databases)
-        return GrantTo(self._privilege)
+        return self._set_on("DATABASE", databases)
 
 
-class DomainOn(PrivilegeClause):
+class DomainOn(OnBase):
     def domain(self, *domains) -> GrantTo:
-        self._privilege._target_type = "DOMAIN"
-        self._privilege._set_targets(domains)
-        return GrantTo(self._privilege)
+        return self._set_on("DOMAIN", domains)
 
 
-class ForeignDataWrapperOn(PrivilegeClause):
+class ForeignDataWrapperOn(OnBase):
     def foreign_data_wrapper(self, *foreign_data_wrappers) -> GrantTo:
-        self._privilege._target_type = "FOREIGN DATA WRAPPER"
-        self._privilege._set_targets(foreign_data_wrappers)
-        return GrantTo(self._privilege)
+        return self._set_on("FOREIGN DATA WRAPPER", foreign_data_wrappers)
 
 
-class ForeignServerOn(PrivilegeClause):
+class ForeignServerOn(OnBase):
     def foreign_server(self, *foreign_servers) -> GrantTo:
-        self._privilege._target_type = "FOREIGN SERVER"
-        self._privilege._set_targets(foreign_servers)
-        return GrantTo(self._privilege)
+        return self._set_on("FOREIGN SERVER", foreign_servers)
 
 
-class LanguageOn(PrivilegeClause):
-    def __call__(self, *languages) -> GrantTo:
-        self._privilege._target_type = "LANGUAGE"
-        self._privilege._set_targets(languages)
-        return GrantTo(self._privilege)
+class LanguageOn(OnBase):
+    def language(self, *languages) -> GrantTo:
+        return self._set_on("LANGUAGE", languages)
 
 
-class LargeObjectOn(PrivilegeClause):
-    def __call__(self, *large_objects) -> GrantTo:
-        self._privilege._target_type = "LARGE OBJECT"
-        self._privilege._set_targets(large_objects)
-        return GrantTo(self._privilege)
+class LargeObjectOn(OnBase):
+    def large_object(self, *large_objects) -> GrantTo:
+        return self._set_on("LARGE OBJECTS", large_objects)
 
 
-class SchemaOn(PrivilegeClause):
-    def __call__(self, *schemas) -> GrantTo:
-        self._privilege._target_type = "SCHEMA"
-        self._privilege._set_targets(schemas)
-        return GrantTo(self._privilege)
+class SchemaOn(OnBase):
+    def schema(self, *schemas) -> GrantTo:
+        return self._set_on("SCHEMA", schemas)
 
 
-class TablespaceOn(PrivilegeClause):
-    def __call__(self, *table_spaces) -> GrantTo:
-        self._privilege._target_type = "TABLESPACE"
-        self._privilege._set_targets(table_spaces)
-        return GrantTo(self._privilege)
+class TablespaceOn(OnBase):
+    def tablespace(self, *table_spaces) -> GrantTo:
+        return self._set_on("TABLESPACE", table_spaces)
 
 
-class TypeOn(PrivilegeClause):
-    def __call__(self, *types) -> GrantTo:
-        self._privilege._target_type = "TYPE"
-        self._privilege._set_targets(types)
-        return GrantTo(self._privilege)
+class TypeOn(OnBase):
+    def type(self, *types) -> GrantTo:
+        return self._set_on("TYPE", types)
 
 
-class ExecuteOn(PrivilegeClause):
+class ExecuteOn(OnBase):
     def function(self, *functions) -> GrantTo:
-        self._privilege._target_type = "FUNCTION"
-        self._privilege._set_targets(functions)
-        return GrantTo(self._privilege)
+        return self._set_on("FUNCTIONS", functions)
 
     @property
     def all(self) -> ExecuteOnInSchema:
@@ -218,14 +208,7 @@ class CreateCommandBase(PrivilegeClause):
         return CreateCommand(self._privilege)
 
 
-class Command(UsageCommandBase, SelectCommandBase, UpdateCommandBase):
-    @property
-    def all(self) -> AllOnConnector:
-        self._privilege._set_commands(CommandOption("ALL"))
-        return AllOnConnector(self._privilege)
-
-
-class TableCommand(PrivilegeClause):
+class TableCommandBase(PrivilegeClause):
     @property
     def select(self) -> 'CallableTableCommand':
         self._privilege._set_commands(CommandOption("SELECT"))
@@ -266,6 +249,8 @@ class TableCommand(PrivilegeClause):
         self._privilege._set_commands(CommandOption("ALL"))
         return TableCommand(self._privilege)
 
+
+class TableCommand(TableCommandBase):
     @property
     def on(self) -> TableOn:
         return TableOn(self._privilege)
@@ -320,9 +305,8 @@ class TableColumnCommand(CallableTableCommand):
         return TableColumnCommand(self._privilege)
 
     @property
-    def on(self, *tables) -> GrantTo:
-        self._privilege._set_targets(tables)
-        return GrantTo(self._privilege)
+    def on(self) -> TableOn:
+        return TableOn(self._privilege)
 
 
 class SequenceCommand(PrivilegeClause):
@@ -341,11 +325,7 @@ class SequenceCommand(PrivilegeClause):
         return self
 
 
-class DatabaseCommand(PrivilegeClause):
-    @property
-    def on(self) -> DatabaseOn:
-        return DatabaseOn(self._privilege)
-
+class DatabaseCommandBase(PrivilegeClause):
     @property
     def create(self) -> 'DatabaseCommand':
         self._privilege._set_commands(CommandOption("CREATE"))
@@ -360,6 +340,11 @@ class DatabaseCommand(PrivilegeClause):
     def temporary(self) -> 'DatabaseCommand':
         self._privilege._set_commands(CommandOption("TEMPORARY"))
         return self
+
+class DatabaseCommand(DatabaseCommandBase):
+    @property
+    def on(self) -> DatabaseOn:
+        return DatabaseOn(self._privilege)
 
 
 class FunctionCommand(PrivilegeClause):
@@ -429,34 +414,47 @@ class CreateCommand(PrivilegeClause):
         return CreateOn(self._privilege)
 
 
-class Privilege(object):
+class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCommandBase, FunctionCommand,
+                TableCommandBase, DatabaseCommandBase):
     def __init__(self, commands=None, target_type=None, targets=None, recipients=None, with_grant_option=False):
+        self._commands = []
+        self._target = []
+        self._recipient = []
         self._set_commands(commands)
         self._target_type = target_type
         self._set_targets(targets)
         self._set_recipients(recipients)
         self._with_grant_option = with_grant_option
+        self._privilege = self  # required to support the various command mix-ins
+        self._current_clause = None
+
+    def __getattr__(self, attr):
+        if hasattr(type(self._current_clause), attr):
+            return getattr(self._current_clause, attr)
+        raise AttributeError("%r object has no attribute %r" % (self.__class__, attr))
 
     def _set_commands(self, commands):
-        if isinstance(commands, list):
-            self._commands = commands
-        elif not hasattr(self, "_commands"):
-            self._commands = [commands]
-        elif commands not in self._commands:
-            self._commands.append(commands)
+        if commands:
+            if isinstance(commands, list):
+                self._commands = commands
+            elif commands not in self._commands:
+                self._commands.append(commands)
 
     def _set_targets(self, target):
-        if isinstance(target, list):
-            self._target = [get_table_name(t) for t in target]
-        elif not hasattr(self, "_target"):
-            self._target = [get_table_name(target)]
-        elif target not in self._target:
-            self._target.append(get_table_name(target))
+        if target:
+            if isinstance(target, list):
+                self._target = [get_table_name(t) for t in target]
+            elif target not in self._target:
+                self._target.append(get_table_name(target))
 
     def _set_recipients(self, recipient):
-        if isinstance(recipient, list):
-            self._recipient = [get_role_name(r) for r in recipient]
-        elif not hasattr(self, "_recipient"):
-            self._recipient = [get_role_name(recipient)]
-        elif recipient not in self._recipient:
-            self._recipient.append(get_role_name(recipient))
+        if recipient:
+            if isinstance(recipient, list):
+                self._recipient = [get_role_name(r) for r in recipient]
+            elif recipient not in self._recipient:
+                self._recipient.append(get_role_name(recipient))
+
+    @property
+    def all(self) -> AllOnConnector:
+        self._privilege._set_commands(CommandOption("ALL"))
+        return AllOnConnector(self._privilege)
