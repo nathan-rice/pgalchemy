@@ -443,16 +443,16 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
     def _set_targets(self, target):
         if target:
             if isinstance(target, list):
-                self._target = [get_table_name(t) for t in target]
+                self._target = target
             elif target not in self._target:
-                self._target.append(get_table_name(target))
+                self._target.append(target)
 
     def _set_recipients(self, recipient):
         if recipient:
             if isinstance(recipient, list):
-                self._recipient = [get_role_name(r) for r in recipient]
+                self._recipient = recipient
             elif recipient not in self._recipient:
-                self._recipient.append(get_role_name(recipient))
+                self._recipient.append(recipient)
 
     @property
     def all(self) -> AllOnConnector:
