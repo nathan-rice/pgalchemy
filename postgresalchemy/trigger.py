@@ -62,7 +62,7 @@ class BaseTrigger(ABC):
         EXECUTE PROCEDURE {function} ({arguments})
     """
 
-    def __init__(self, name=None, function=None, execution_time="AFTER", event="INSERT", selectable='',
+    def __init__(self, name, function=None, execution_time="AFTER", event="INSERT", selectable='',
                  from_table='', defer="NOT DEFERRABLE", cardinality="ROW", condition='', arguments=''):
         self._function = function
         self._set_execution_time(execution_time)
@@ -83,19 +83,15 @@ class BaseTrigger(ABC):
     def __str__(self):
         if not self._function:
             raise RuntimeError("No function has been specified for this trigger to execute")
-        name = self._get_name()
         event = " OR ".join(self._event)
         arguments = ",".join("'s'" % str(a) for a in self._arguments)
-        statement = self._sql_template.format(name=name, constraint=self._constraint,
+        statement = self._sql_template.format(name=self._name, constraint=self._constraint,
                                               execution_time=self._execution_time, event=event,
                                               selectable=self._selectable, from_table=self._from_table,
                                               deferr=self._defer, cardinality=self._cardinality,
                                               condition=self._condition, function=self._function,
                                               arguments=arguments)
         return statement
-
-    def _get_name(self):
-        return self._name or self._generate_name()
 
     def _set_function(self, f):
         if f:
@@ -113,14 +109,6 @@ class BaseTrigger(ABC):
     @abstractmethod
     def _set_constraint(self):
         return NotImplemented
-
-    def _generate_name(self):
-        if not self._function:
-            raise ValueError
-        event = ','.join(self._event)
-        parameters = (self._execution_time, event, self._selectable, self._from_table, self._defer, self._cardinality,
-                      self._condition, self._function, self._arguments)
-        return zlib.adler32(''.join(parameters))
 
     def _set_execution_time(self, execution_time: str):
         execution_time = execution_time.upper()
