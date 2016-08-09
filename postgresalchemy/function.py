@@ -3,10 +3,28 @@ import zlib
 import math
 import re
 
-from .types import *
+from typing import Sequence
+from datetime import date, time, datetime, timedelta
+from .trigger import Trigger
+
+Array = type('Array', Sequence.__bases__, dict(Sequence.__dict__))
+
+mappings = {
+    bool: 'boolean',
+    int: 'int',
+    float: 'numeric',
+    bytes: 'bytea',
+    bytearray: 'bytea',
+    str: 'text',
+    date: 'date',
+    time: 'time without time zone',
+    datetime: 'timestamp without time zone',
+    timedelta: 'interval',
+    Trigger: 'trigger'
+}
 
 
-class Procedure(object):
+class Function(object):
     _sql_template = """
         CREATE FUNCTION {name} ({parameters}) RETURNS {return_type} AS $$
         {code}
@@ -27,7 +45,7 @@ class Procedure(object):
                                          code=self.code, volatile=volatile)
 
 
-class ProcedureGenerator(object):
+class FunctionGenerator(object):
     _re_flags = re.DOTALL | re.MULTILINE
     _function_body_re = re.compile(r"\s*def\s+[^(]+\(.*?\)\s*(?:->\s*[^\n]+)?\s*:(?:\s*#[^\n]*)?\n(.*)",
                                    flags=_re_flags)
@@ -35,12 +53,12 @@ class ProcedureGenerator(object):
     @classmethod
     def from_function(cls, f):
         parameters = cls.get_parameters(f)
-        sql_parameters = [cls.generate_sql_procedure_parameter(p) for p in parameters]
+        sql_parameters = [cls.generate_sql_function_parameter(p) for p in parameters]
         sql_return = cls.generate_return_type(f)
         # Code related
         function_body = cls.get_function_body(f)
         cls.check_for_overwritten_input_parameters(parameters, function_body)
-        return Procedure(name=f.__name__, parameters=sql_parameters, return_type=sql_return, code=function_body)
+        return Function(name=f.__name__, parameters=sql_parameters, return_type=sql_return, code=function_body)
 
     @staticmethod
     def get_parameters(f):
@@ -110,7 +128,7 @@ class ProcedureGenerator(object):
         return result
 
     @classmethod
-    def generate_sql_procedure_parameter(cls, parameter):
+    def generate_sql_function_parameter(cls, parameter):
         type_name = cls.convert_python_type_to_sql(parameter.annotation)
         type_and_default = cls.generate_sql_default_value(type_name, parameter.default)
         sql_parameter = " ".join((parameter.name, type_and_default))

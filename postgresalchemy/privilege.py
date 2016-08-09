@@ -1,4 +1,4 @@
-from typing import Sequence
+from .types import ValueSetter, FluentClauseContainer, PostgresOption
 from .util import get_column_name, get_table_name, get_role_name
 
 
@@ -11,7 +11,7 @@ class PrivilegeClause(object):
         return str(self._privilege)
 
 
-class CommandOption(object):
+class CommandOption(PostgresOption):
     def __init__(self, command_name, *columns):
         self.name = command_name
         self.columns = columns
@@ -432,7 +432,11 @@ class CreateCommand(PrivilegeClause):
 
 
 class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCommandBase, FunctionCommand,
-                TableCommandBase, DatabaseCommandBase):
+                TableCommandBase, DatabaseCommandBase, FluentClauseContainer):
+    _sql_grant_template = """
+    GRANT {commands} on {target_type} {targets} to {recipients}
+    """
+
     def __init__(self, commands=None, target_type=None, targets=None, recipients=None, with_grant_option=False):
         self._commands = []
         self._target = []
@@ -443,36 +447,15 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
         self._set_recipients(recipients)
         self._with_grant_option = with_grant_option
         self._privilege = self  # required to support the various command mix-ins
-        self._current_clause = None
-
-    def __getattr__(self, attr):
-        if hasattr(type(self._current_clause), attr):
-            return getattr(self._current_clause, attr)
-        raise AttributeError("%r object has no attribute %r" % (self.__class__, attr))
 
     def _set_commands(self, commands):
-        if commands:
-            if isinstance(commands, CommandOption):
-                if commands not in self._commands:
-                    self._commands.append(commands)
-            elif isinstance(commands, Sequence):
-                self._commands = list(commands)
+        ValueSetter.set(self._commands, commands)
 
     def _set_targets(self, target):
-        if target:
-            if isinstance(target, str):
-                if target not in self._target:
-                    self._target.append(target)
-            elif isinstance(target, Sequence):
-                self._target = list(target)
+        ValueSetter.set(self._target, target)
 
     def _set_recipients(self, recipient):
-        if recipient:
-            if isinstance(recipient, str):
-                if recipient not in self._recipient:
-                    self._recipient.append(recipient)
-            elif isinstance(recipient, Sequence):
-                self._recipient = list(recipient)
+        ValueSetter.set(self._recipient, recipient)
 
     @property
     def all(self) -> AllOnConnector:

@@ -1,19 +1,25 @@
 from typing import Sequence
-from datetime import date, time, datetime, timedelta
-from .trigger import Trigger
 
-Array = type('Array', Sequence.__bases__, dict(Sequence.__dict__))
+class PostgresOption(object):
+    """Base class for Postgres command options."""
 
-mappings = {
-    bool: 'boolean',
-    int: 'int',
-    float: 'numeric',
-    bytes: 'bytea',
-    bytearray: 'bytea',
-    str: 'text',
-    date: 'date',
-    time: 'time without time zone',
-    datetime: 'timestamp without time zone',
-    timedelta: 'interval',
-    Trigger: 'trigger'
-}
+class FluentClauseContainer(object):
+    _current_clause = None
+
+    def __getattr__(self, attr):
+        if hasattr(type(self._current_clause), attr):
+            return getattr(self._current_clause, attr)
+        raise AttributeError("%r object has no attribute %r" % (self.__class__, attr))
+
+
+class ValueSetter(object):
+    @staticmethod
+    def set(container: list, value):
+        if value:
+            if isinstance(value, (str, PostgresOption)):
+                if value not in container:
+                    container.append(value)
+            elif isinstance(value, Sequence):
+                container.clear()
+                container.extend(list(value))
+

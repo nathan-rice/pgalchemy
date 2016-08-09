@@ -1,4 +1,5 @@
 from sqlalchemy import Table, Column
+from sqlalchemy.sql.elements import ClauseList
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from .role import get_role_name
 
@@ -22,3 +23,8 @@ def get_table_name(t):
     else:
         name = t
     return name
+
+def get_condition_text(condition):
+    if isinstance(condition, ClauseList):
+        condition = condition.compile(compile_kwargs={"literal_binds": True})
+    return condition
