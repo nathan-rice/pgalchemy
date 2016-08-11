@@ -1,6 +1,7 @@
+from types import FunctionType
 from .types import ValueSetter, FluentClauseContainer, PostgresOption
 from .util import get_column_name, get_table_name, get_role_name
-
+from .function import FunctionGenerator
 
 class PrivilegeClause(object):
     def __init__(self, privilege):
@@ -434,7 +435,7 @@ class CreateCommand(PrivilegeClause):
 class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCommandBase, FunctionCommand,
                 TableCommandBase, DatabaseCommandBase, FluentClauseContainer):
     _sql_grant_template = """
-    GRANT {commands} on {target_type} {targets} to {recipients}
+        GRANT {commands} on {target_type} {targets} to {recipients}
     """
 
     def __init__(self, commands=None, target_type=None, targets=None, recipients=None, with_grant_option=False):
@@ -456,6 +457,23 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
 
     def _set_recipients(self, recipient):
         ValueSetter.set(self._recipient, recipient)
+
+    def _format_target(self):
+        def format_function(f):
+            if isinstance(f, str):
+                return f
+            elif isinstance(f, FunctionType):
+                parameters = FunctionGenerator.get_parameters(f)
+                sql_types = [FunctionGenerator.convert_python_type_to_sql(p.annotation) for p in parameters]
+                return "%s(%s)" % (f.__name__, ", ".join(sql_types))
+        if self._target_type == "FUNCTION":
+            target = [format_function(f) for f in self._target]
+        elif self._target_type == "TABLE":
+            target = [get_table_name(t) for t in self._target]
+        else:
+            target = self._target
+        return ", ".join(target)
+
 
     @property
     def all(self) -> AllOnConnector:

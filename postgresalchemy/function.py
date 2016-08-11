@@ -61,7 +61,7 @@ class FunctionGenerator(object):
         return Function(name=f.__name__, parameters=sql_parameters, return_type=sql_return, code=function_body)
 
     @staticmethod
-    def get_parameters(f):
+    def get_parameters(f) -> Sequence[inspect.Parameter]:
         signature = inspect.signature(f)
         parameters = signature.parameters.values()
         return parameters

@@ -24,7 +24,9 @@ def get_table_name(t):
         name = t
     return name
 
+
 def get_condition_text(condition):
     if isinstance(condition, ClauseList):
         condition = condition.compile(compile_kwargs={"literal_binds": True})
     return condition
+
