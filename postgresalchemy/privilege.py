@@ -3,6 +3,7 @@ from .types import ValueSetter, FluentClauseContainer, PostgresOption
 from .util import get_column_name, get_table_name, get_role_name
 from .function import FunctionGenerator
 
+
 class PrivilegeClause(object):
     def __init__(self, privilege):
         self._privilege = privilege
@@ -466,6 +467,7 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
                 parameters = FunctionGenerator.get_parameters(f)
                 sql_types = [FunctionGenerator.convert_python_type_to_sql(p.annotation) for p in parameters]
                 return "%s(%s)" % (f.__name__, ", ".join(sql_types))
+
         if self._target_type == "FUNCTION":
             target = [format_function(f) for f in self._target]
         elif self._target_type == "TABLE":
@@ -473,7 +475,6 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
         else:
             target = self._target
         return ", ".join(target)
-
 
     @property
     def all(self) -> AllOnConnector:
