@@ -2,9 +2,9 @@ import inspect
 import zlib
 import math
 import re
-
 from typing import Sequence
 from datetime import date, time, datetime, timedelta
+from .util import convert_python_value_to_sql
 from .trigger import Trigger
 
 Array = type('Array', Sequence.__bases__, dict(Sequence.__dict__))
@@ -106,26 +106,9 @@ class FunctionGenerator(object):
             return type_name
 
     @staticmethod
-    def convert_python_value_to_sql(value):
-        def convert_inner(val):
-            if val is None:
-                converted_val = "NULL"
-            elif isinstance(val, str):
-                converted_val = "'%s'" % val.replace("'", "''")
-            elif isinstance(val, (int, float, bool)):
-                converted_val = str(val)
-            elif isinstance(val, (datetime, date, time)):
-                converted_val = "'%s'" % val.isoformat()
-            elif isinstance(val, Sequence):
-                array_values = ','.join(convert_inner(v) for v in val)
-                converted_val = "ARRAY[%s]" % array_values
-            elif hasattr(val, "__table__"):
-                converted_val = val.__table__.name
-            else:
-                raise ValueError("No known type mapping for Python type: %s" % type(val))
-            return converted_val
-        result = convert_inner(value)
-        return result
+    def convert_python_value_to_sql(default):
+        # TODO: remove this and update the tests that point to it to point to the version in util instead
+        return convert_python_value_to_sql(default)
 
     @classmethod
     def generate_sql_function_parameter(cls, parameter):
