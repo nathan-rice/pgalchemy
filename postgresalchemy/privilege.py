@@ -1,6 +1,7 @@
 from types import FunctionType
 from .types import ValueSetter, FluentClauseContainer, PostgresOption
-from .util import get_column_name, get_table_name, get_role_name
+from .util import get_column_name, get_table_name, get_role_name, before_create, after_create, before_drop, is_postgres, \
+    execute_if_postgres
 from .function import FunctionGenerator
 
 
@@ -439,6 +440,10 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
         GRANT {commands} on {target_type} {targets} to {recipients}
     """
 
+    _sql_revoke_template = """
+        REVOKE {commands} on {target_type} {targets} from {recipients}
+    """
+
     def __init__(self, commands=None, target_type=None, targets=None, recipients=None, with_grant_option=False):
         self._commands = []
         self._target = []
@@ -476,7 +481,38 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
             target = self._target
         return ", ".join(target)
 
+    def _grant(self, target, connection, **kwargs):
+        statement = self._sql_grant_template.format()
+        execute_if_postgres(connection, statement)
+
+    @property
+    def _grant_statement(self):
+        commands = ", ".join(str(command) for command in self._commands)
+        target_type = self._target_type or ""
+        if target_type == "TABLE":
+            target_names = (get_table_name(t) for t in self._target)
+        elif target_type == "SEQUENCE":
+            pass
+        elif target_type == "DOMAIN":
+            pass
+        targets = ", ".join(target_names)
+        statement = self._sql_grant_template.format(commands)
+
+    def _revoke(self, target, connection, **kwargs):
+        statement = self._sql_grant_template.format()
+        execute_if_postgres(connection, statement)
+
+    @property
+    def _revoke_statement(self):
+        pass
+
     @property
     def all(self) -> AllOnConnector:
         self._privilege._set_commands(CommandOption("ALL"))
         return AllOnConnector(self._privilege)
+
+
+def grant(*privileges, connection=None):
+    for privilege in privileges:
+        if connection:
+            execute_if_postgres(connection, privilege)

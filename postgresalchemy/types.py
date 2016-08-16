@@ -1,7 +1,9 @@
 from typing import Sequence
 
+
 class PostgresOption(object):
     """Base class for Postgres command options."""
+
 
 class FluentClauseContainer(object):
     _current_clause = None

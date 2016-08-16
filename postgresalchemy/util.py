@@ -2,13 +2,29 @@ import re
 from typing import Sequence
 from datetime import date, datetime, time
 from sqlalchemy import Table, Column
+from sqlalchemy.engine import Connection, Dialect, Engine
+from sqlalchemy.event import listen
 from sqlalchemy.dialects.postgres import dialect
-from sqlalchemy.engine import Connection
-from sqlalchemy.engine import Dialect
-from sqlalchemy.engine import Engine
 from sqlalchemy.sql.elements import ClauseList
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from .role import get_role_name
+
+
+def before_create(f, table=Table):
+    listen(table, "before_create", f)
+
+
+def after_create(f, table=Table):
+    listen(table, "after_create", f)
+
+
+def before_drop(f, table=Table):
+    listen(table, "before_create", f)
+
+
+def after_drop(f, table=Table):
+    listen(table, "after_create", f)
+
 
 
 def get_column_name(c):
@@ -51,6 +67,14 @@ def is_postgres(connection_dialect_or_engine):
     return dialect_is_postgres
 
 
+def execute_if_postgres(connection, statement):
+    if is_postgres(connection):
+        try:
+            connection.execute(statement)
+        except Exception:
+            pass
+
+
 def convert_python_value_to_sql(value):
     def convert_inner(val):
         if val is None:
@@ -69,8 +93,10 @@ def convert_python_value_to_sql(value):
         else:
             raise ValueError("No known type mapping for Python type: %s" % type(val))
         return converted_val
+
     result = convert_inner(value)
     return result
+
 
 _first_cap_re = re.compile('(.)([A-Z][a-z]+)')
 _all_cap_re = re.compile('([a-z0-9])([A-Z])')
