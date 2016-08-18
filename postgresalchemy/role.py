@@ -1,15 +1,15 @@
-def get_role_name(r):
-    if isinstance(r, Role):
-        name = r.name
-    else:
-        name = r
-    return name
+from postgresalchemy.types import Creatable
+from postgresalchemy.util import get_name
 
 
-class Role(object):
+class Role(Creatable):
 
-    _sql_template = """
-    CREATE ROLE {name} {with_options}
+    _sql_create_template = """
+        CREATE ROLE {name} {with_options}
+    """
+
+    _sql_drop_template = """
+        DROP ROLE IF EXISTS {name}
     """
 
     def __init__(self, name, options=None):
@@ -25,11 +25,16 @@ class Role(object):
         self._set_boolean_option(self._last_option, value)
         return self
 
-    def __str__(self):
-        options = " ".join(self.options.values())
+    @property
+    def _create_statement(self):
+        options = " ".join(self._options.values())
         if options:
             options = "WITH " + options
-        return self._sql_template.format(name=self.name, with_options=options)
+        return self._sql_create_template.format(name=self.name, with_options=options)
+
+    @property
+    def _drop_statement(self):
+        return self._sql_drop_template.format(name=self.name)
 
     @property
     def superuser(self) -> 'Role':
@@ -76,19 +81,19 @@ class Role(object):
 
     def in_role(self, *roles) -> 'Role':
         if roles:
-            role_names = ", ".join(get_role_name(r) for r in roles)
+            role_names = ", ".join(get_name(r) for r in roles)
             self._options["IN ROLE"] = "IN ROLE %s" % role_names
         return self
 
     def including_roles(self, *roles) -> 'Role':
         if roles:
-            role_names = ", ".join(get_role_name(r) for r in roles)
+            role_names = ", ".join(get_name(r) for r in roles)
             self._options["ROLE"] = "ROLE %s" % role_names
         return self
 
     def including_admins(self, *roles) -> 'Role':
         if roles:
-            role_names = ", ".join(get_role_name(r) for r in roles)
+            role_names = ", ".join(get_name(r) for r in roles)
             self._options["ADMIN"] = "ADMIN %s" % role_names
         return self
 

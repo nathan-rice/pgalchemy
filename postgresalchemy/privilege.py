@@ -1,7 +1,7 @@
 from types import FunctionType
 from .types import ValueSetter, FluentClauseContainer, PostgresOption
-from .util import get_column_name, get_table_name, get_role_name, before_create, after_create, before_drop, is_postgres, \
-    execute_if_postgres
+from .util import get_name, get_table_name, get_role_name, before_create, after_create, before_drop, is_postgres, \
+    execute_if_postgres, get_name
 from .function import FunctionGenerator
 
 
@@ -10,8 +10,13 @@ class PrivilegeClause(object):
         self._privilege = privilege
         self._privilege._current_clause = self
 
-    def __str__(self):
-        return str(self._privilege)
+    @property
+    def _grant_statement(self):
+        return self._privilege._grant_statement
+
+    @property
+    def _revoke_statement(self):
+        return self._privilege._revoke_statement
 
 
 class CommandOption(PostgresOption):
@@ -21,7 +26,7 @@ class CommandOption(PostgresOption):
 
     def __str__(self):
         if self.columns:
-            column_names = ", ".join(get_column_name(c) for c in self.columns)
+            column_names = ", ".join(get_name(c) for c in self.columns)
             as_str = "%s (%s)" % (self.name, column_names)
         else:
             as_str = self.name
@@ -481,30 +486,22 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
             target = self._target
         return ", ".join(target)
 
-    def _grant(self, target, connection, **kwargs):
-        statement = self._sql_grant_template.format()
-        execute_if_postgres(connection, statement)
+    def _statement(self, template):
+        commands = ", ".join(str(command) for command in self._commands)
+        target_type = self._target_type or ""
+        target_names = [get_name(s) for s in self._target]
+        targets = ", ".join(target_names)
+        recipient_names = [get_name(r) for r in self._recipient]
+        recipients = ", ".join(recipient_names)
+        return template.format(commands=commands, target_type=target_type, targets=targets, recipients=recipients)
 
     @property
     def _grant_statement(self):
-        commands = ", ".join(str(command) for command in self._commands)
-        target_type = self._target_type or ""
-        if target_type == "TABLE":
-            target_names = (get_table_name(t) for t in self._target)
-        elif target_type == "SEQUENCE":
-            pass
-        elif target_type == "DOMAIN":
-            pass
-        targets = ", ".join(target_names)
-        statement = self._sql_grant_template.format(commands)
-
-    def _revoke(self, target, connection, **kwargs):
-        statement = self._sql_grant_template.format()
-        execute_if_postgres(connection, statement)
+        return self._statement(self._sql_grant_template)
 
     @property
     def _revoke_statement(self):
-        pass
+        return self._statement(self._sql_revoke_template)
 
     @property
     def all(self) -> AllOnConnector:
@@ -514,5 +511,17 @@ class Privilege(UsageCommandBase, SelectCommandBase, UpdateCommandBase, CreateCo
 
 def grant(*privileges, connection=None):
     for privilege in privileges:
+        statement = privilege._grant_statement
         if connection:
-            execute_if_postgres(connection, privilege)
+            execute_if_postgres(connection, statement)
+        else:
+            after_create(statement)
+
+
+def revoke(*privileges, connection=None):
+    for privilege in privileges:
+        statement = privilege._revoke_statement
+        if connection:
+            execute_if_postgres(connection, statement)
+        else:
+            after_create(statement)

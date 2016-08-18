@@ -7,44 +7,44 @@ from sqlalchemy.event import listen
 from sqlalchemy.dialects.postgres import dialect
 from sqlalchemy.sql.elements import ClauseList
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from .role import get_role_name
 
 
-def before_create(f, table=Table):
-    listen(table, "before_create", f)
+def before_create(statement, table=Table):
+    def handle_event(target, connection, **kwargs):
+        execute_if_postgres(connection, statement)
+    listen(table, "before_create", handle_event)
 
 
-def after_create(f, table=Table):
-    listen(table, "after_create", f)
+def after_create(statement, table=Table):
+    def handle_event(target, connection, **kwargs):
+        execute_if_postgres(connection, statement)
+    listen(table, "after_create", handle_event)
 
 
-def before_drop(f, table=Table):
-    listen(table, "before_create", f)
+def before_drop(statement, table=Table):
+    def handle_event(target, connection, **kwargs):
+        execute_if_postgres(connection, statement)
+    listen(table, "before_drop", handle_event)
 
 
-def after_drop(f, table=Table):
-    listen(table, "after_create", f)
+def after_drop(statement, table=Table):
+    def handle_event(target, connection, **kwargs):
+        execute_if_postgres(connection, statement)
+    listen(table, "after_drop", handle_event)
 
 
-
-def get_column_name(c):
-    if isinstance(c, Column):
-        name = "%s.%s" % (c.table.name, c.name)
-    elif isinstance(c, InstrumentedAttribute):
-        column = c.prop.columns[0]  # Need the underlying database table column
+def get_name(e):
+    if isinstance(e, Column):
+        name = "%s.%s" % (e.table.name, e.name)
+    elif isinstance(e, InstrumentedAttribute):
+        column = e.prop.columns[0]  # Need the underlying database table column
         name = "%s.%s" % (column.table.name, column.name)
+    elif hasattr(e, "__table__"):
+        name = e.__table__.name
+    elif hasattr(e, "name"):
+        name = e.name
     else:
-        name = c
-    return name
-
-
-def get_table_name(t):
-    if hasattr(t, "__table__"):
-        name = t.__table__.name
-    elif isinstance(t, Table):
-        name = t.name
-    else:
-        name = t
+        name = e
     return name
 
 

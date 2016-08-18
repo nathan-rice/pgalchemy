@@ -2,7 +2,7 @@ import inspect
 from typing import Union, Sequence
 
 from abc import ABC, abstractmethod
-from .util import get_column_name, get_condition_text, get_table_name
+from .util import get_name, get_condition_text, get_table_name
 from .types import FluentClauseContainer
 
 
@@ -32,7 +32,7 @@ class TriggerEvent(TriggerClause):
         return self
 
     def update_of(self, *columns) -> 'TriggerEvent':
-        column_names = ", ".join(get_column_name(c) for c in columns)
+        column_names = ", ".join(get_name(c) for c in columns)
         self._trigger._set_event("UPDATE OF %s" % column_names)
         return self
 

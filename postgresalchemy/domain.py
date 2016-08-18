@@ -3,7 +3,10 @@ from sqlalchemy.sql.visitors import VisitableType
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import ColumnClause
 from sqlalchemy.sql.compiler import GenericTypeCompiler
-from .util import get_condition_text, camelcase_to_underscore, before_create, after_create, execute_if_postgres
+from sqlalchemy.dialects.postgres import dialect
+
+from postgresalchemy.types import Creatable
+from .util import get_condition_text, camelcase_to_underscore
 
 
 class _Value(ColumnClause):
@@ -41,12 +44,23 @@ class DomainMeta(VisitableType):
                 return type_.name
 
             setattr(GenericTypeCompiler, "visit_" + domain.name, visit_domain)
-            before_create(domain._grant)
-            after_create(domain._revoke)
         return domain
 
+    @property
+    def _create_statement(self):
+        type_ = self.type.compile(dialect)
+        collate = "COLLATE %s" % self.collate if hasattr(self, "collate") else ""
+        default = "DEFAULT %s" % self.default if hasattr(self, "default") else ""
+        constraint = "CHECK (%s)" % get_condition_text(self.constraint) if hasattr(self, "constraint") else ""
+        return self._create_sql_template.format(name=self.name, type=type_, collate=collate, default=default,
+                                                constraint=constraint)
 
-class Domain(metaclass=DomainMeta):
+    @property
+    def _drop_statement(self):
+        return self._drop_sql_template.format(name=self.name)
+
+
+class Domain(Creatable, metaclass=DomainMeta):
     _create_sql_template = """
         CREATE DOMAIN {name} AS {type} {collate} {default} {constraint}
     """
@@ -55,17 +69,4 @@ class Domain(metaclass=DomainMeta):
         DROP DOMAIN {name}
     """
 
-    @classmethod
-    def _create(cls, target, connection, **kwargs):
-        type_ = cls.type.compile(connection.dialect)
-        collate = "COLLATE %s" % cls.collate if hasattr(cls, "collate") else ""
-        default = "DEFAULT %s" % cls.default if hasattr(cls, "default") else ""
-        constraint = "CHECK (%s)" % get_condition_text(cls.constraint) if hasattr(cls, "constraint") else ""
-        statement = cls._create_sql_template.format(name=cls.name, type=type_, collate=collate, default=default,
-                                                    constraint=constraint)
-        execute_if_postgres(connection, statement)
 
-    @classmethod
-    def _drop(cls, target, connection, **kwargs):
-        statement = cls._drop_sql_template.format(name=cls.name)
-        execute_if_postgres(connection, statement)

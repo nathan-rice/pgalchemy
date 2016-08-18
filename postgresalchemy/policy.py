@@ -1,7 +1,7 @@
 from typing import Sequence
 
-from .util import get_table_name, get_condition_text, get_column_name, get_role_name
-from .types import FluentClauseContainer, ValueSetter
+from .util import get_condition_text, get_name
+from .types import FluentClauseContainer, ValueSetter, DependentCreatable
 
 
 class PolicyClause(object):
@@ -61,7 +61,7 @@ class PolicyOnClause(PolicyToClause, PolicyUsingClause, PolicyCheckClause):
         return PolicyForClause(self._policy)
 
 
-class Policy(FluentClauseContainer):
+class Policy(FluentClauseContainer, DependentCreatable):
     _sql_create_template = """
         CREATE POLICY {name} on {table_name} {for_command} {to_recipient} {using_expression} {with_check_expression}
     """
@@ -81,8 +81,9 @@ class Policy(FluentClauseContainer):
         self._policy = self
         self._current_clause = None
 
-    def __str__(self):
-        table_name = get_table_name(self._table)
+    @property
+    def _create_statement(self):
+        table_name = get_name(self._table)
         for_command = "FOR %s" % self._command if self._command else ''
         to_recipient = "TO %s" % ', '.join(self._recipient) if self._recipient else ''
         using_expression = "USING (%s)" % get_condition_text(self._using) if self._using else ''
@@ -90,6 +91,11 @@ class Policy(FluentClauseContainer):
         return self._sql_create_template.format(name=self._name, table_name=table_name, for_command=for_command,
                                                 to_recipient=to_recipient, using_expression=using_expression,
                                                 with_check_expression=with_check_expression)
+
+    @property
+    def _drop_statement(self):
+        table_name = get_name(self._table)
+        return self._sql_drop_template.format(name=self._name, table_name=table_name)
 
     def _set_recipient(self, recipient):
         ValueSetter.set(self._recipient, recipient)
