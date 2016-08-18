@@ -4,10 +4,18 @@ from .util import get_condition_text, get_name
 from .types import FluentClauseContainer, ValueSetter, DependentCreatable
 
 
-class PolicyClause(object):
+class PolicyClause(DependentCreatable):
     def __init__(self, policy):
         self._policy = policy
         self._policy._current_clause = self
+
+    @property
+    def _create_statement(self):
+        return self._policy._create_statement
+
+    @property
+    def _drop_statement(self):
+        return self._policy._drop_statement
 
 
 class PolicyCheckClause(PolicyClause):

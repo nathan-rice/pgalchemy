@@ -2,8 +2,8 @@ import inspect
 from typing import Union, Sequence
 
 from abc import ABC, abstractmethod
-from .util import get_name, get_condition_text, get_table_name
-from .types import FluentClauseContainer
+from .util import get_condition_text, get_name
+from .types import FluentClauseContainer, DependentCreatable
 
 
 class TriggerClause(object):
@@ -46,7 +46,7 @@ class TriggerEvent(TriggerClause):
         return TriggerFrom(self._trigger)
 
 
-class BaseTrigger(ABC, FluentClauseContainer):
+class BaseTrigger(FluentClauseContainer, DependentCreatable):
     _valid_execution_times = {"BEFORE", "AFTER", "INSTEAD OF"}
     _valid_defers = {"NOT DEFERRABLE", "DEFERRABLE INITIALLY IMMEDIATE", "DEFERRABLE INITIALLY DEFERRED"}
     _valid_cardinalities = {"FOR EACH ROW", "FOR EACH STATEMENT"}
@@ -57,6 +57,10 @@ class BaseTrigger(ABC, FluentClauseContainer):
         {cardinality}
         {condition}
         EXECUTE PROCEDURE {function} ({arguments})
+    """
+
+    _sql_drop_template = """
+        DROP TRIGGER IF EXISTS {name} on {selectable}
     """
 
     def __init__(self, name, function=None, execution_time="AFTER", event="INSERT", selectable='',
@@ -86,19 +90,26 @@ class BaseTrigger(ABC, FluentClauseContainer):
         self._set_function(f)
         return f
 
-    def __str__(self):
+    @property
+    def _create_statement(self):
         if not self._function:
             raise RuntimeError("No function has been specified for this trigger to execute")
         event = " OR ".join(self._event)
         arguments = ",".join("'s'" % str(a) for a in self._arguments)
-        selectable = get_table_name(self._selectable) if self._selectable else ''
-        from_table = get_table_name(self._from_table) if self._from_table else ''
+        selectable = get_name(self._selectable) if self._selectable else ''
+        from_table = get_name(self._from_table) if self._from_table else ''
         statement = self._sql_create_template.format(name=self._name, constraint=self._constraint,
                                                      execution_time=self._execution_time, event=event,
                                                      selectable=selectable, from_table=from_table,
                                                      deferr=self._defer, cardinality=self._cardinality,
                                                      condition=self._condition, function=self._function,
                                                      arguments=arguments)
+        return statement
+
+    @property
+    def _drop_statement(self):
+        selectable = get_name(self._selectable) if self._selectable else ''
+        statement = self._sql_drop_template.format(name=self._name, selectable=selectable)
         return statement
 
     def _set_function(self, f):

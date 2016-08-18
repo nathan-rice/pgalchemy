@@ -4,6 +4,8 @@ import math
 import re
 from typing import Sequence
 from datetime import date, time, datetime, timedelta
+
+from postgresalchemy.types import Creatable
 from .util import convert_python_value_to_sql
 from .trigger import Trigger
 
@@ -24,11 +26,15 @@ mappings = {
 }
 
 
-class Function(object):
-    _sql_template = """
+class Function(Creatable):
+    _sql_create_template = """
         CREATE FUNCTION {name} ({parameters}) RETURNS {return_type} AS $$
         {code}
         $$ LANGUAGE plpython3u {volatile}
+    """
+
+    _sql_drop_template = """
+        DROP FUNCTION IF EXISTS {name} ({parameters})
     """
 
     def __init__(self, name=None, parameters=None, return_type="void", code="", volatile=True):
@@ -38,11 +44,17 @@ class Function(object):
         self.code = code
         self.volatile = volatile
 
-    def __str__(self):
+    @property
+    def _create_statement(self):
         parameters = ", ".join(self.parameters)
         volatile = "VOLATILE" if self.volatile else "STABLE"
-        return self._sql_template.format(name=self.name, parameters=parameters, return_type=self.return_type,
-                                         code=self.code, volatile=volatile)
+        return self._sql_create_template.format(name=self.name, parameters=parameters, return_type=self.return_type,
+                                                code=self.code, volatile=volatile)
+
+    @property
+    def _drop_statement(self):
+        parameters = ", ".join(self.parameters)
+        return self._sql_drop_template.format(name=self.name, parameters=parameters)
 
 
 class FunctionGenerator(object):
