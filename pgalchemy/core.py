@@ -3,8 +3,8 @@ from collections import OrderedDict
 
 class PostgresAlchemy(object):
 
-    def __init__(self, engine=None):
-        self.engine = engine
+    def __init__(self, connection=None):
+        self.engine = connection
         self.roles = OrderedDict()
         self.procedure = OrderedDict()
         self.triggers = OrderedDict()

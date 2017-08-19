@@ -1,5 +1,5 @@
 import pytest
-from postgresalchemy import trigger as t
+from pgalchemy import trigger as t
 from .config import *
 
 
@@ -42,8 +42,7 @@ def test_trigger_with_default_arguments():
 
 
 def test_trigger_with_default_arguments_2():
-    trigger = t.Trigger("test")
-    trigger.before.insert.update.on(test_table).for_each.row.with_arguments("a", "b")(example_9)
+    trigger = t.Trigger(example_9).before.insert.update.on(test_table).for_each.row.with_arguments("a", "b")
     assert trigger._arguments == ("a", "b")
 
 

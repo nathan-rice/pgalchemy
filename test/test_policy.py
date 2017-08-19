@@ -1,5 +1,5 @@
 import pytest
-import postgresalchemy.policy as p
+import pgalchemy.policy as p
 from .config import *
 
 

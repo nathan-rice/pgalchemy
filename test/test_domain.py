@@ -1,7 +1,7 @@
 import sqlalchemy as sa
 from sqlalchemy import Text
 from sqlalchemy.schema import CreateTable
-from postgresalchemy import domain as d
+from pgalchemy import domain as d
 
 
 class EmailAddressDomain(d.Domain, Text):

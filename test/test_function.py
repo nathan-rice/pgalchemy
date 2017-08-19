@@ -1,5 +1,5 @@
 import pytest
-import postgresalchemy.function as f
+import pgalchemy.function as f
 from .config import *
 
 

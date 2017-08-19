@@ -5,7 +5,7 @@ import re
 from typing import Sequence
 from datetime import date, time, datetime, timedelta
 
-from postgresalchemy.types import Creatable
+from pgalchemy.types import Creatable
 from .util import convert_python_value_to_sql
 from .trigger import Trigger
 

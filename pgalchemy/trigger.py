@@ -2,7 +2,7 @@ import inspect
 from typing import Union, Sequence
 
 from abc import ABC, abstractmethod
-from .util import get_condition_text, get_name
+from .util import get_condition_text, get_name, sanitize_name
 from .types import FluentClauseContainer, DependentCreatable
 
 
@@ -32,7 +32,7 @@ class TriggerEvent(TriggerClause):
         return self
 
     def update_of(self, *columns) -> 'TriggerEvent':
-        column_names = ", ".join(get_name(c) for c in columns)
+        column_names = ", ".join('%s' % get_name(c) for c in columns)
         self._trigger._set_event("UPDATE OF %s" % column_names)
         return self
 
@@ -63,7 +63,7 @@ class BaseTrigger(FluentClauseContainer, DependentCreatable):
         DROP TRIGGER IF EXISTS {name} on {selectable}
     """
 
-    def __init__(self, name, function=None, execution_time="AFTER", event="INSERT", selectable='',
+    def __init__(self, f, name=None, execution_time="AFTER", event="INSERT", selectable='',
                  from_table='', defer="NOT DEFERRABLE", cardinality="ROW", condition='', arguments=''):
         self._execution_time = None
         self._function = None
@@ -74,7 +74,7 @@ class BaseTrigger(FluentClauseContainer, DependentCreatable):
         self._cardinality = None
         self._condition = None
         self._arguments = None
-        self._function = function
+        self._function = f
         self._set_execution_time(execution_time)
         self._set_event(event)
         self._set_selectable(selectable)
@@ -84,7 +84,7 @@ class BaseTrigger(FluentClauseContainer, DependentCreatable):
         self._set_condition(condition)
         self._set_arguments(arguments)
         self._set_constraint()
-        self._name = name
+        self._name = name or "trigger_%s" % f.__name__
 
     def __call__(self, f):
         self._set_function(f)
@@ -92,24 +92,41 @@ class BaseTrigger(FluentClauseContainer, DependentCreatable):
 
     @property
     def _create_statement(self):
+        bind_params = []
         if not self._function:
             raise RuntimeError("No function has been specified for this trigger to execute")
         event = " OR ".join(self._event)
-        arguments = ",".join("'s'" % str(a) for a in self._arguments)
-        selectable = get_name(self._selectable) if self._selectable else ''
-        from_table = get_name(self._from_table) if self._from_table else ''
-        statement = self._sql_create_template.format(name=self._name, constraint=self._constraint,
+        if self._name:
+            name = '"%s"'
+            bind_params.append(sanitize_name(self._name))
+        if self._selectable:
+            selectable = get_name(self._selectable)
+        if self._from_table:
+            from_table = '"%s"'
+            bind_params.append(get_name(self._from_table))
+        if self._function:
+            function = '"%s"'
+            bind_params.append(sanitize_name(self._function))
+        if self._arguments:
+            arguments = ", ".join('%s' for _ in self._arguments)
+            bind_params.extend(self._arguments)
+        statement = self._sql_create_template.format(name=name, constraint=self._constraint,
                                                      execution_time=self._execution_time, event=event,
                                                      selectable=selectable, from_table=from_table,
                                                      deferr=self._defer, cardinality=self._cardinality,
-                                                     condition=self._condition, function=self._function,
+                                                     condition=self._condition, function=function,
                                                      arguments=arguments)
-        return statement
+        return statement, bind_params
 
     @property
     def _drop_statement(self):
-        selectable = get_name(self._selectable) if self._selectable else ''
-        statement = self._sql_drop_template.format(name=self._name, selectable=selectable)
+        bind_params = []
+        if self._name:
+            name = '"%s"'
+            bind_params.append(self.name)
+        if self._selectable:
+            selectable = get_name(self._selectable)
+        statement = self._sql_drop_template.format(name=name, selectable=selectable)
         return statement
 
     def _set_function(self, f):

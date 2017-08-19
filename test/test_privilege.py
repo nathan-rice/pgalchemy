@@ -1,5 +1,5 @@
 import pytest
-import postgresalchemy.privilege as p
+import pgalchemy.privilege as p
 from .config import *
 
 

@@ -1,5 +1,5 @@
-from postgresalchemy.types import Creatable
-from postgresalchemy.util import get_name
+from pgalchemy.types import Creatable
+from pgalchemy.util import get_name
 
 
 class Role(Creatable):

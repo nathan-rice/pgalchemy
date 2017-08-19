@@ -1,8 +1,8 @@
 from typing import Sequence
 from sqlalchemy import MetaData, Table, Column, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
-from postgresalchemy.function import Array
-from postgresalchemy.trigger import Trigger
+from pgalchemy.function import Array
+from pgalchemy.trigger import Trigger
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)

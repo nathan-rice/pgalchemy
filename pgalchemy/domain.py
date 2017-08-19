@@ -5,7 +5,7 @@ from sqlalchemy.sql.expression import ColumnClause
 from sqlalchemy.sql.compiler import GenericTypeCompiler
 from sqlalchemy.dialects.postgres import dialect
 
-from postgresalchemy.types import Creatable
+from pgalchemy.types import Creatable
 from .util import get_condition_text, camelcase_to_underscore
 
 
